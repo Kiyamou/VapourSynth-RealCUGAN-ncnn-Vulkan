@@ -1,5 +1,7 @@
 # VapourSynth-RealCUGAN-ncnn-Vulkan
 
+[![Build Status](https://github.com/Kiyamou/VapourSynth-RealCUGAN-ncnn-Vulkan/workflows/CI/badge.svg)](https://github.com/Kiyamou/VapourSynth-RealCUGAN-ncnn-Vulkan/actions)
+
 Real-CUGAN (Real Cascade U-Nets) super resolution for VapourSynth, based on [realcugan-ncnn-vulkan](https://github.com/nihui/realcugan-ncnn-vulkan). Some code is from [vapoursynth-waifu2x-ncnn-vulkan](https://github.com/Nlzy/vapoursynth-waifu2x-ncnn-vulkan).
 
 Real-CUGAN is designed for anime. More information about Real-CUGAN can be found at [Real-CUGAN](https://github.com/bilibili/ailab/tree/main/Real-CUGAN).
@@ -57,10 +59,10 @@ Models should be located in folder `models`, and folder `models` should be locat
   *  Optional parameter. *Default: 2*.
   *  Sync Gap. Reduce the impact of image blocking. It's a trade-off between speed and quality.
   *  Value range: 0, 1, 2, 3.
-    * syncgap = 0: without process for sync gap (fast).
-    * syncgap = 1: lossless (slow).
-    * syncgap = 2: some loss for background, less loss for texture (middle).
-    * syncgap = 3: more loss for background, less loss for texture (fast).
+     * syncgap = 0: without process for sync gap (fast).
+     * syncgap = 1: lossless (slow).
+     * syncgap = 2: some loss for background, less loss for texture (middle).
+     * syncgap = 3: more loss for background, less loss for texture (fast).
 
 ### Support list
 

@@ -53,7 +53,7 @@ option(NCNN_BUILD_TESTS "" OFF)
 option(NCNN_BUILD_TOOLS "" OFF)
 option(NCNN_BUILD_EXAMPLES "" OFF)
 option(NCNN_DISABLE_RTTI "" ON)
-option(NCNN_DISABLE_EXCEPTION "" ON)
+option(NCNN_DISABLE_EXCEPTION "" OFF)
 option(NCNN_INT8 "" OFF)
 
 option(WITH_LAYER_absval "" OFF)
