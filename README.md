@@ -24,30 +24,35 @@ Models should be located in folder `models`, and folder `models` should be locat
 * ***scale***
   * Optional parameter. *Default: 2*.
   * Upscale ratio.
-  * Support 2x, 3x, 4x scale.
+  * Value range: 2, 3, 4.
 * ***noise***
   * Optional parameter. *Default: 0*.
   * Denoise level.
-  * Optional levels: -1, 0, 1, 2, 3. Higher level means stronger denoise. `noise = -1` means no effect.
-  * When `scale = 3` or `scale = 4`, `noise = 1` and `noise = 2` are not supported.
+  * Value range: -1, 0, 1, 2, 3.
+    * Higher level means stronger denoise. `noise = -1` means no effect.
+    * When `scale = 3` or `scale = 4`, `noise = 1` and `noise = 2` are not supported.
 * ***model***
   * Optional parameter. *Default: 1*.
-  * Select pre-trained model:
+  * Select pre-trained model.
+  * Value range: 0, 1, 2.
     * model = 0: models-nose. Only support `scale = 2` and `noise = 0`.
     * model = 1: models-se.
+    * model = 2: models-pro.
   
   **The models and their supported upscale ratio and denoise level are shown in the list below.**
 
 * ***tilesize_x***
   * Optional parameter. *Default: 0 (when `scale = 3` or `4` and `tta = True`, default: 100)*.
   * The tilesize for horizontal.
-  * Value range: >= 32 or 0. 0 is auto.
-  * When `scale = 3` or `4` and `tta = True`, please set small value to make sure the plugin run normally.
+  * Value range: >= 32 or 0.
+    * `tilesize_x = 0` means setting automatically according to the video size.
+    * When `scale = 3` or `4` and `tta = True`, please set small value to make sure the plugin run normally.
 * ***tilesize_y***
   * Optional parameter. *Default: same as tilesize_x*.
   * The tilesize for vertical.
-  * Value range: >= 32 or 0. 0 is auto.
-  * When `scale = 3` or `4` and `tta = True`, please set small value to make sure the plugin run normally.
+  * Value range: >= 32 or 0.
+    * `tilesize_y = 0` means setting automatically according to the video size.
+    * When `scale = 3` or `4` and `tta = True`, please set small value to make sure the plugin run normally.
 * ***prepadding***
   * Optional parameter. *Default: 18 (2x scale), 14 (3x scale), 19 (4x scale)*.
   * Pre-padding. If don't have experience for training model, please keep it.
@@ -66,13 +71,13 @@ Models should be located in folder `models`, and folder `models` should be locat
 
 ### Support list
 
-|   Parameters   | scale = 2<br>(model-nose) | scale = 2<br/>(model-se) | scale = 3<br/>(model-se) | scale = 4<br/>(model-se) |
-| :------------: | :-----------------------: | :----------------------: | :----------------------: | :----------------------: |
-| **noise = -1** |            :x:            |    :heavy_check_mark:    |    :heavy_check_mark:    |    :heavy_check_mark:    |
-| **noise = 0**  |    :heavy_check_mark:     |    :heavy_check_mark:    |    :heavy_check_mark:    |    :heavy_check_mark:    |
-| **noise = 1**  |            :x:            |    :heavy_check_mark:    |           :x:            |           :x:            |
-| **noise = 2**  |            :x:            |    :heavy_check_mark:    |           :x:            |           :x:            |
-| **noise = 3**  |            :x:            |    :heavy_check_mark:    |    :heavy_check_mark:    |    :heavy_check_mark:    |
+|   Parameters   | scale = 2<br/>(model-nose) | scale = 2<br/>(model-se) | scale = 2<br/>(model-pro) | scale = 3<br/>(model-se) | scale = 3<br/>(model-pro) | scale = 4<br/>(model-se) |
+| :------------: | :------------------------: | :----------------------: | :-----------------------: | :----------------------: | :-----------------------: | :----------------------: |
+| **noise = -1** |            :x:             |    :heavy_check_mark:    |    :heavy_check_mark:     |    :heavy_check_mark:    |    :heavy_check_mark:     |    :heavy_check_mark:    |
+| **noise = 0**  |     :heavy_check_mark:     |    :heavy_check_mark:    |    :heavy_check_mark:     |    :heavy_check_mark:    |    :heavy_check_mark:     |    :heavy_check_mark:    |
+| **noise = 1**  |            :x:             |    :heavy_check_mark:    |            :x:            |           :x:            |            :x:            |           :x:            |
+| **noise = 2**  |            :x:             |    :heavy_check_mark:    |            :x:            |           :x:            |            :x:            |           :x:            |
+| **noise = 3**  |            :x:             |    :heavy_check_mark:    |    :heavy_check_mark:     |    :heavy_check_mark:    |    :heavy_check_mark:     |    :heavy_check_mark:    |
 
 ## Compilation
 

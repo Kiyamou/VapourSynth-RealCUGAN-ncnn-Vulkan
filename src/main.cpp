@@ -180,15 +180,20 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         {
             model = 1;
         }
-        if (model != 1 && model != 0)
+        if (model > 2 || model < 0)
         {
-            throw std::string{ "invalid model type, please try 0 or 1" };
+            throw std::string{ "'model' only supports 0 - 2." };
         }
 
         if (model == 1)
         {
             paramPath += "/models/models-se";
             modelPath += "/models/models-se";
+        }
+        else if (model == 2)
+        {
+            paramPath += "/models/models-pro";
+            modelPath += "/models/models-pro";
         }
         else if (model == 0 && scale == 2)
         {
@@ -241,7 +246,8 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         if (!pf.good() || !mf.good())
         {
             throw std::string{ "The model files can't be opened. " \
-                               "If 'noise' be set as 1 or 2, the models only support 2x scale now." };
+                               "For 'models-se' (model = 1), if 'noise' be set as 1 or 2, the models only support 2x scale. " \
+                               "For 'models-pro' (model = 2), the models don't support 4x scale or noise = 1 or 2." };
         }
 
         // GPU ID

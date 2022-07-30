@@ -5,7 +5,9 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 project(vapoursynth-realcugan-ncnn-vulkan)
 cmake_minimum_required(VERSION 3.9)
-set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE release CACHE STRING "Choose the type of build" FORCE)
+endif()
 
 find_package(Vulkan REQUIRED)
 
@@ -148,6 +150,8 @@ option(WITH_LAYER_deconvolution1d "" OFF)
 option(WITH_LAYER_deconvolutiondepthwise1d "" OFF)
 option(WITH_LAYER_deconvolution3d "" OFF)
 option(WITH_LAYER_deconvolutiondepthwise3d "" OFF)
+option(WITH_LAYEY_enisum "" OFF)
+option(WITH_LAYER_deformableconv2d "" OFF)
 
 add_subdirectory(deps/ncnn)
 
