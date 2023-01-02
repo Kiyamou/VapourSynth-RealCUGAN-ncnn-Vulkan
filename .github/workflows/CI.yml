@@ -22,7 +22,7 @@ on:
 env:
   VULKAN_SDK_VERSION: 1.3.236.0
   VAPOURSYNTH_VERSION: R61
-  BUILD_TYPE: Release
+  CMAKE_BUILD_TYPE: Release
 
 jobs:
   build:
