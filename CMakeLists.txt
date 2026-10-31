@@ -6,9 +6,7 @@ set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 project(vapoursynth-realcugan-ncnn-vulkan)
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE release CACHE STRING "Choose the type of build" FORCE)
-endif()
+set(CMAKE_BUILD_TYPE Release)
 
 option(USE_VAPOURSYNTH_API4 "Build for VapourSynth API4 (disable for API3)" ON)
 
@@ -18,7 +16,6 @@ find_package(Vulkan REQUIRED)
 macro(realcugan_add_shader SHADER_SRC)
     get_filename_component(SHADER_SRC_NAME_WE ${SHADER_SRC} NAME_WE)
     set(SHADER_COMP_HEADER ${CMAKE_CURRENT_BINARY_DIR}/${SHADER_SRC_NAME_WE}.comp.hex.h)
-    
     add_custom_command(
             OUTPUT ${SHADER_COMP_HEADER}
             COMMAND ${CMAKE_COMMAND} -DSHADER_SRC=${CMAKE_CURRENT_SOURCE_DIR}/${SHADER_SRC} -DSHADER_COMP_HEADER=${SHADER_COMP_HEADER} -P "${CMAKE_CURRENT_SOURCE_DIR}/src/generate_shader_comp_header.cmake"
@@ -27,7 +24,6 @@ macro(realcugan_add_shader SHADER_SRC)
             VERBATIM
     )
     set_source_files_properties(${SHADER_COMP_HEADER} PROPERTIES GENERATED TRUE)
-    
     list(APPEND SHADER_SPV_HEX_FILES ${SHADER_COMP_HEADER})
 endmacro()
 
