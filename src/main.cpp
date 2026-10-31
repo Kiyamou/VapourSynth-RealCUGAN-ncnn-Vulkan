@@ -9,8 +9,24 @@
 
 #include "realcugan.hpp"
 
+#ifdef USE_VAPOURSYNTH_API4
+#include "VapourSynth4.h"
+#include "VSHelper4.h"
+
+using FilterNode = VSNode;
+using FilterFrame = VSFrame;
+using FilterFormat = VSVideoFormat;
+using vsh::int64ToIntS;
+constexpr int RGB_COLOR_FAMILY = cfRGB;
+#else
 #include "VapourSynth.h"
 #include "VSHelper.h"
+
+using FilterNode = VSNodeRef;
+using FilterFrame = VSFrameRef;
+using FilterFormat = VSFormat;
+constexpr int RGB_COLOR_FAMILY = cmRGB;
+#endif
 
 class Semaphore
 {
@@ -42,7 +58,7 @@ public:
 
 struct FilterData
 {
-    VSNodeRef* node;
+    FilterNode* node;
     const VSVideoInfo* vi;
     int target_width, target_height;
     RealCUGAN* realcugan;
@@ -53,29 +69,36 @@ static std::mutex g_lock{};
 static int g_filter_instance_count = 0;
 static std::map<int, Semaphore*> g_gpu_semaphore;
 
-static void process(const VSFrameRef* src, VSFrameRef* dst, const FilterData* const VS_RESTRICT d, const VSAPI* vsapi) noexcept
+static const FilterFormat* getFormat(const VSVideoInfo* vi) noexcept
 {
-    if (d->vi->format->colorFamily == cmRGB)
-    {
-        int src_width = vsapi->getFrameWidth(src, 0);
-        int src_height = vsapi->getFrameHeight(src, 0);
-        int src_stride = vsapi->getStride(src, 0) / sizeof(float);
-        int dst_stride = vsapi->getStride(dst, 0) / sizeof(float);
-
-        const float* srcpR = reinterpret_cast<const float*>(vsapi->getReadPtr(src, 0));
-        const float* srcpG = reinterpret_cast<const float*>(vsapi->getReadPtr(src, 1));
-        const float* srcpB = reinterpret_cast<const float*>(vsapi->getReadPtr(src, 2));
-
-        float* VS_RESTRICT dstpR = reinterpret_cast<float*>(vsapi->getWritePtr(dst, 0));
-        float* VS_RESTRICT dstpG = reinterpret_cast<float*>(vsapi->getWritePtr(dst, 1));
-        float* VS_RESTRICT dstpB = reinterpret_cast<float*>(vsapi->getWritePtr(dst, 2));
-
-        d->gpuSemaphore->wait();
-        d->realcugan->process(srcpR, srcpG, srcpB, dstpR, dstpG, dstpB, src_width, src_height, src_stride, dst_stride);
-        d->gpuSemaphore->signal();
-    }
+#ifdef USE_VAPOURSYNTH_API4
+    return &vi->format;
+#else
+    return vi->format;
+#endif
 }
 
+static void process(const FilterFrame* src, FilterFrame* dst, const FilterData* const VS_RESTRICT d, const VSAPI* vsapi) noexcept
+{
+    int src_width = vsapi->getFrameWidth(src, 0);
+    int src_height = vsapi->getFrameHeight(src, 0);
+    int src_stride = vsapi->getStride(src, 0) / sizeof(float);
+    int dst_stride = vsapi->getStride(dst, 0) / sizeof(float);
+
+    const float* srcpR = reinterpret_cast<const float*>(vsapi->getReadPtr(src, 0));
+    const float* srcpG = reinterpret_cast<const float*>(vsapi->getReadPtr(src, 1));
+    const float* srcpB = reinterpret_cast<const float*>(vsapi->getReadPtr(src, 2));
+
+    float* VS_RESTRICT dstpR = reinterpret_cast<float*>(vsapi->getWritePtr(dst, 0));
+    float* VS_RESTRICT dstpG = reinterpret_cast<float*>(vsapi->getWritePtr(dst, 1));
+    float* VS_RESTRICT dstpB = reinterpret_cast<float*>(vsapi->getWritePtr(dst, 2));
+
+    d->gpuSemaphore->wait();
+    d->realcugan->process(srcpR, srcpG, srcpB, dstpR, dstpG, dstpB, src_width, src_height, src_stride, dst_stride);
+    d->gpuSemaphore->signal();
+}
+
+#ifndef USE_VAPOURSYNTH_API4
 static void VS_CC filterInit(VSMap* in, VSMap* out, void** instanceData, VSNode* node, VSCore* core, const VSAPI* vsapi)
 {
     FilterData* d = static_cast<FilterData*>(*instanceData);
@@ -84,10 +107,17 @@ static void VS_CC filterInit(VSMap* in, VSMap* out, void** instanceData, VSNode*
     dst_vi.height = d->target_height;
     vsapi->setVideoInfo(&dst_vi, 1, node);
 }
+#endif
 
-static const VSFrameRef* VS_CC filterGetFrame(int n, int activationReason, void** instanceData, void** frameData, VSFrameContext* frameCtx, VSCore* core, const VSAPI* vsapi)
+#ifdef USE_VAPOURSYNTH_API4
+static const FilterFrame* VS_CC filterGetFrame(int n, int activationReason, void* instanceData, void** frameData, VSFrameContext* frameCtx, VSCore* core, const VSAPI* vsapi)
+{
+    const FilterData* d = static_cast<const FilterData*>(instanceData);
+#else
+static const FilterFrame* VS_CC filterGetFrame(int n, int activationReason, void** instanceData, void** frameData, VSFrameContext* frameCtx, VSCore* core, const VSAPI* vsapi)
 {
     const FilterData* d = static_cast<const FilterData*>(*instanceData);
+#endif
 
     if (activationReason == arInitial)
     {
@@ -95,13 +125,12 @@ static const VSFrameRef* VS_CC filterGetFrame(int n, int activationReason, void*
     }
     else if (activationReason == arAllFramesReady)
     {
-        const VSFrameRef* src = vsapi->getFrameFilter(n, d->node, frameCtx);
-        VSFrameRef* dst = vsapi->newVideoFrame(d->vi->format, d->target_width, d->target_height,src, core);
+        const FilterFrame* src = vsapi->getFrameFilter(n, d->node, frameCtx);
+        FilterFrame* dst = vsapi->newVideoFrame(getFormat(d->vi), d->target_width, d->target_height, src, core);
 
         process(src, dst, d, vsapi);
 
         vsapi->freeFrame(src);
-        
         return dst;
     }
 
@@ -134,7 +163,19 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
     std::unique_ptr<FilterData> d = std::make_unique<FilterData>();
     int err;
 
-    d->node = vsapi->propGetNode(in, "clip", 0, nullptr);
+#ifdef USE_VAPOURSYNTH_API4
+    const auto getNode = vsapi->mapGetNode;
+    const auto getInt = vsapi->mapGetInt;
+    const auto setError = vsapi->mapSetError;
+    const auto getPluginById = vsapi->getPluginByID;
+#else
+    const auto getNode = vsapi->propGetNode;
+    const auto getInt = vsapi->propGetInt;
+    const auto setError = vsapi->setError;
+    const auto getPluginById = vsapi->getPluginById;
+#endif
+
+    d->node = getNode(in, "clip", 0, nullptr);
     d->vi = vsapi->getVideoInfo(d->node);
 
     {
@@ -150,13 +191,19 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
 
     try
     {
-        if (!isConstantFormat(d->vi) || d->vi->format->sampleType == stInteger ||
-            (d->vi->format->sampleType == stFloat && d->vi->format->bitsPerSample != 32))
+#ifdef USE_VAPOURSYNTH_API4
+        const bool constantFormat = vsh::isConstantVideoFormat(d->vi);
+#else
+        const bool constantFormat = isConstantFormat(d->vi);
+#endif
+        const FilterFormat* format = getFormat(d->vi);
+        if (!constantFormat || format->colorFamily != RGB_COLOR_FAMILY ||
+            format->sampleType != stFloat || format->bitsPerSample != 32)
         {
-            throw std::string{ "Only constant format 32 bits float input is supported." };
+            throw std::string{ "Only constant format 32 bits float RGB input is supported." };
         }
 
-        int scale = int64ToIntS(vsapi->propGetInt(in, "scale", 0, &err));
+        int scale = int64ToIntS(getInt(in, "scale", 0, &err));
         if (err)
         {
             scale = 2;
@@ -170,12 +217,12 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         d->target_height = d->vi->height * scale;
 
         // Model path
-        const std::string pluginPath{ vsapi->getPluginPath(vsapi->getPluginById("com.vapoursynth.realcugannv", core)) };
-        std::string paramPath{ pluginPath.substr(0, pluginPath.find_last_of('/')) };
-        std::string modelPath{ pluginPath.substr(0, pluginPath.find_last_of('/')) };
+        const std::string pluginPath{ vsapi->getPluginPath(getPluginById("com.vapoursynth.realcugannv", core)) };
+        std::string paramPath{ pluginPath.substr(0, pluginPath.find_last_of("/\\")) };
+        std::string modelPath{ pluginPath.substr(0, pluginPath.find_last_of("/\\")) };
 
         // Model
-        int model = int64ToIntS(vsapi->propGetInt(in, "model", 0, &err));
+        int model = int64ToIntS(getInt(in, "model", 0, &err));
         if (err)
         {
             model = 1;
@@ -208,7 +255,7 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         }
 
         // Noise
-        int noise = int64ToIntS(vsapi->propGetInt(in, "noise", 0, &err));
+        int noise = int64ToIntS(getInt(in, "noise", 0, &err));
         if (err)
         {
             noise = 0;
@@ -251,7 +298,7 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         }
 
         // GPU ID
-        int gpuId = int64ToIntS(vsapi->propGetInt(in, "gpu_id", 0, &err));
+        int gpuId = int64ToIntS(getInt(in, "gpu_id", 0, &err));
         if (err)
         {
             gpuId = 0;
@@ -262,10 +309,10 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         }
 
         // TTA
-        bool tta = !!vsapi->propGetInt(in, "tta", 0, &err);
+        bool tta = !!getInt(in, "tta", 0, &err);
 
         // Tile size
-        int tilesize_x = int64ToIntS(vsapi->propGetInt(in, "tilesize_x", 0, &err));
+        int tilesize_x = int64ToIntS(getInt(in, "tilesize_x", 0, &err));
         if (err)
         {
             tilesize_x = 0;
@@ -280,7 +327,7 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
             tilesize_x = 100;
         }
 
-        int tilesize_y = int64ToIntS(vsapi->propGetInt(in, "tilesize_y", 0, &err));
+        int tilesize_y = int64ToIntS(getInt(in, "tilesize_y", 0, &err));
         if (err)
         {
             tilesize_y = tilesize_x;
@@ -378,7 +425,7 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         }
 
         // Prepadding
-        int prepadding = int64ToIntS(vsapi->propGetInt(in, "prepadding", 0, &err));
+        int prepadding = int64ToIntS(getInt(in, "prepadding", 0, &err));
         if (err)
         {
             if (scale == 2)
@@ -390,7 +437,7 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
         }
 
         // Sync Gap
-        int syncgap = int64ToIntS(vsapi->propGetInt(in, "syncgap", 0, &err));
+        int syncgap = int64ToIntS(getInt(in, "syncgap", 0, &err));
         if (err)
         {
             syncgap = 2;
@@ -407,7 +454,7 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
 
         // GPU Thread
         int gpuThread;
-        int customGpuThread = int64ToIntS(vsapi->propGetInt(in, "gpu_thread", 0, &err));
+        int customGpuThread = int64ToIntS(getInt(in, "gpu_thread", 0, &err));
         if (customGpuThread > 0)
         {
             gpuThread = customGpuThread;
@@ -446,14 +493,42 @@ static void VS_CC filterCreate(const VSMap* in, VSMap* out, void* userData, VSCo
             }
         }
 
-        vsapi->setError(out, ("RealCUGAN: " + error).c_str());
+        setError(out, ("RealCUGAN: " + error).c_str());
         vsapi->freeNode(d->node);
         return;
     }
 
+#ifdef USE_VAPOURSYNTH_API4
+    VSVideoInfo dst_vi = *d->vi;
+    dst_vi.width = d->target_width;
+    dst_vi.height = d->target_height;
+    const VSFilterDependency dependency{ d->node, rpStrictSpatial };
+    vsapi->createVideoFilter(out, "RealCUGAN", &dst_vi, filterGetFrame, filterFree, fmParallel, &dependency, 1, d.release(), core);
+#else
     vsapi->createFilter(in, out, "RealCUGAN", filterInit, filterGetFrame, filterFree, fmParallel, 0, d.release(), core);
+#endif
 }
 
+#ifdef USE_VAPOURSYNTH_API4
+VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin* plugin, const VSPLUGINAPI* vspapi)
+{
+    vspapi->configPlugin("com.vapoursynth.realcugannv", "rcnv", "RealCUGAN ncnn Vulkan plugin", VS_MAKE_VERSION(1, 0), VAPOURSYNTH_API_VERSION, 0, plugin);
+
+    vspapi->registerFunction("RealCUGAN",
+                            "clip:vnode;"
+                            "scale:int:opt;"
+                            "noise:int:opt;"
+                            "model:int:opt;"
+                            "tilesize_x:int:opt;"
+                            "tilesize_y:int:opt;"
+                            "prepadding:int:opt;"
+                            "tta:int:opt;"
+                            "syncgap:int:opt;"
+                            "gpu_id:int:opt;"
+                            "gpu_thread:int:opt;",
+                            "clip:vnode;", filterCreate, nullptr, plugin);
+}
+#else
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin* plugin)
 {
     configFunc("com.vapoursynth.realcugannv", "rcnv", "RealCUGAN ncnn Vulkan plugin", VAPOURSYNTH_API_VERSION, 1, plugin);
@@ -472,3 +547,4 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
                  "gpu_thread:int:opt",
                  filterCreate, 0, plugin);
 }
+#endif
